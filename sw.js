@@ -1,5 +1,5 @@
 // 離線時仍可打開 App 外殼；即時車位與地圖圖磚一律走網路
-const C = 'parking-v1';
+const C = 'parking-v2';
 const SHELL = ['./', 'index.html', 'leaflet.js', 'leaflet.css', 'manifest.json', 'icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(C).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k))))); self.clients.claim(); });

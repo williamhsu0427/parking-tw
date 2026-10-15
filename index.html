@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1565c0">
+<title>附近停車位</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="leaflet.css">
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--text:#1b2430;--sub:#5f6b7a;--line:#e1e5eb;--blue:#1565c0;--green:#2e7d32;--amber:#ef8f00;--red:#c62828;--gray:#8a94a3}
+@media (prefers-color-scheme:dark){:root{--bg:#11161d;--card:#1b222c;--text:#e8edf3;--sub:#9aa6b4;--line:#2b3440;--blue:#64a8f0;--green:#5cbf63;--amber:#f2a93b;--red:#ef6a6a;--gray:#7d8794}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;-webkit-tap-highlight-color:transparent}
+body{display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:8px;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top));background:var(--blue);color:#fff}
+@media (prefers-color-scheme:dark){header{background:#0d47a1}}
+header h1{font-size:18px;margin:0;flex:1}
+header button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:10px;padding:8px 12px;font-size:15px}
+#map{height:42vh;min-height:220px;flex:none;background:#dde3ea}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--line)}
+.chip{border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:999px;padding:6px 12px;font-size:14px}
+.chip.on{background:var(--blue);border-color:var(--blue);color:#fff}
+select{border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:999px;padding:6px 8px;font-size:14px}
+label.tg{display:flex;align-items:center;gap:4px;font-size:14px;color:var(--sub);margin-left:auto}
+#status{padding:6px 12px;font-size:13px;color:var(--sub);background:var(--bg)}
+#status.err{color:var(--red)}
+#list{flex:1;overflow:auto;padding:0 12px calc(16px + env(safe-area-inset-bottom))}
+.item{display:flex;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px}
+.item.sel{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue) inset}
+.num{min-width:58px;text-align:center;border-radius:10px;padding:6px 4px;color:#fff;font-weight:700;font-size:20px;line-height:1.1}
+.num small{display:block;font-size:11px;font-weight:400;opacity:.9}
+.g{background:var(--green)}.a{background:var(--amber)}.r{background:var(--red)}.u{background:var(--gray)}
+.info{flex:1;min-width:0}
+.info b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.info span{font-size:13px;color:var(--sub)}
+.tag{display:inline-block;font-size:11px;border-radius:6px;padding:1px 6px;margin-right:4px;border:1px solid var(--line);color:var(--sub)}
+.fare{font-size:12px;color:var(--sub);margin-top:4px;white-space:pre-wrap;display:none}
+.item.sel .fare{display:block}
+.nav{background:var(--blue);color:#fff;border:0;border-radius:10px;padding:10px 12px;font-size:14px;text-decoration:none;white-space:nowrap}
+.empty{text-align:center;color:var(--sub);padding:28px 8px;font-size:14px}
+.pin{display:flex;align-items:center;justify-content:center;border-radius:14px;color:#fff;font:700 12px system-ui;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);min-width:28px;height:24px;padding:0 4px}
+.pin.seg{border-radius:4px}
+.me{width:18px;height:18px;border-radius:50%;background:#1e88e5;border:3px solid #fff;box-shadow:0 0 0 6px rgba(30,136,229,.25)}
+#mapwrap{position:relative;flex:none}
+#here{position:absolute;z-index:500;left:50%;transform:translateX(-50%);bottom:12px;display:none;border:0;border-radius:999px;padding:8px 14px;background:#fff;color:#1565c0;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+dialog{border:0;border-radius:16px;padding:18px;width:min(92vw,420px);background:var(--card);color:var(--text)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog h2{margin:0 0 8px;font-size:18px}
+dialog p{font-size:14px;color:var(--sub);line-height:1.5;margin:6px 0}
+dialog input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font-size:15px;margin:4px 0 10px}
+dialog a{color:var(--blue)}
+.row{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.row button{border:0;border-radius:10px;padding:10px 14px;font-size:15px;background:var(--bg);color:var(--text)}
+.row button.pri{background:var(--blue);color:#fff}
+</style>
+</head>
+<body>
+<header>
+  <h1>附近停車位</h1>
+  <button id="btnRefresh" aria-label="重新整理">↻ 更新</button>
+  <button id="btnSet" aria-label="設定">⚙</button>
+</header>
+<div id="mapwrap"><div id="map"></div><button id="here">在這裡搜尋</button></div>
+<div class="bar">
+  <button class="chip on" data-k="all">全部</button>
+  <button class="chip" data-k="lot">停車場</button>
+  <button class="chip" data-k="seg">路邊格</button>
+  <select id="radius" aria-label="搜尋範圍">
+    <option value="500">500 公尺</option>
+    <option value="1000" selected>1 公里</option>
+    <option value="2000">2 公里</option>
+  </select>
+  <label class="tg"><input type="checkbox" id="onlyFree">只看有空位</label>
+</div>
+<div id="status">準備中…</div>
+<div id="list"></div>
+
+<dialog id="dlg">
+  <h2>TDX 金鑰設定</h2>
+  <p>即時車位資料來自交通部 TDX 平台。請到 <a href="https://tdx.transportdata.tw/register" target="_blank" rel="noopener">tdx.transportdata.tw</a> 免費註冊，登入後在「會員中心 → 資料服務 → API 金鑰」取得 Client Id 和 Client Secret。</p>
+  <p>金鑰只存在這支手機上，不會傳到其他地方。</p>
+  <label>Client Id<input id="cid" autocomplete="off" spellcheck="false"></label>
+  <label>Client Secret<input id="csec" autocomplete="off" spellcheck="false"></label>
+  <div class="row">
+    <button id="dlgSkip">先不用金鑰試用</button>
+    <button id="dlgSave" class="pri">儲存</button>
+  </div>
+</dialog>
+
+<script src="leaflet.js"></script>
+<script>
+'use strict';
+// ---- 設定與儲存（localStorage 可能不可用，一律包 try） ----
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+};
+const API = 'https://tdx.transportdata.tw/api/basic/v1/Parking/';
+const AUTH = 'https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token';
+const STATIC_TTL = 3 * 24 * 3600e3;   // 停車場位置、路段資料三天更新一次
+const REFRESH_MS = 60e3;              // 即時車位每分鐘更新
+
+// 各縣市政府位置，用來挑出離使用者最近的幾個縣市
+const CITIES = [
+  ['Taipei', '臺北市', 25.0375, 121.5637], ['NewTaipei', '新北市', 25.0120, 121.4650], ['Keelung', '基隆市', 25.1316, 121.7445],
+  ['Taoyuan', '桃園市', 24.9936, 121.3010], ['Hsinchu', '新竹市', 24.8066, 120.9686], ['HsinchuCounty', '新竹縣', 24.8270, 121.0128],
+  ['MiaoliCounty', '苗栗縣', 24.5650, 120.8205], ['Taichung', '臺中市', 24.1618, 120.6467], ['ChanghuaCounty', '彰化縣', 24.0757, 120.5444],
+  ['NantouCounty', '南投縣', 23.9023, 120.6904], ['YunlinCounty', '雲林縣', 23.6990, 120.5262], ['Chiayi', '嘉義市', 23.4813, 120.4537],
+  ['ChiayiCounty', '嘉義縣', 23.4588, 120.2925], ['Tainan', '臺南市', 22.9926, 120.1852], ['Kaohsiung', '高雄市', 22.6203, 120.3120],
+  ['PingtungCounty', '屏東縣', 22.6728, 120.4880], ['YilanCounty', '宜蘭縣', 24.7303, 121.7630], ['HualienCounty', '花蓮縣', 23.9913, 121.6200],
+  ['TaitungCounty', '臺東縣', 22.7557, 121.1504], ['PenghuCounty', '澎湖縣', 23.5667, 119.5664], ['KinmenCounty', '金門縣', 24.4368, 118.3186],
+  ['LienchiangCounty', '連江縣', 26.1571, 119.9519]
+];
+
+const $ = s => document.querySelector(s);
+const state = { center: null, gps: null, kind: 'all', radius: +LS.get('radius', 1000), onlyFree: LS.get('onlyFree', false), items: [], sel: null, busy: false };
+$('#radius').value = String(state.radius);
+$('#onlyFree').checked = state.onlyFree;
+
+function dist(a, b, c, d) {
+  const R = 6371e3, r = Math.PI / 180, x = (d - b) * r * Math.cos((a + c) / 2 * r), y = (c - a) * r;
+  return Math.sqrt(x * x + y * y) * R;
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function setStatus(t, err) { const el = $('#status'); el.textContent = t; el.className = err ? 'err' : ''; }
+
+// ---- TDX 登入與呼叫 ----
+let token = LS.get('tdxToken', null);
+async function getToken(force) {
+  const key = LS.get('tdxKey', null);
+  if (!key || !key.id || !key.secret) return null;
+  if (!force && token && token.exp > Date.now() + 60e3) return token.v;
+  const r = await fetch(AUTH, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'client_credentials', client_id: key.id, client_secret: key.secret }) });
+  if (!r.ok) throw new Error(r.status === 401 || r.status === 400 ? '金鑰不正確，請到 ⚙ 重新輸入' : '登入 TDX 失敗（' + r.status + '）');
+  const j = await r.json();
+  token = { v: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
+  LS.set('tdxToken', token);
+  return token.v;
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function tdx(path) {
+  for (let i = 0; i < 3; i++) {
+    const t = await getToken();
+    const r = await fetch(API + path + (path.includes('?') ? '&' : '?') + '$format=JSON', { headers: t ? { authorization: 'Bearer ' + t } : {} });
+    if (r.ok) return r.json();
+    if (r.status === 401 && t) { token = null; LS.del('tdxToken'); await getToken(true); continue; }
+    if (r.status === 429) { if (i < 2) { await sleep(1500 * (i + 1)); continue; } throw new Error(t ? '查詢太頻繁，請稍後再試' : '沒有金鑰的試用次數已用完，請到 ⚙ 輸入金鑰'); }
+    if (r.status === 404 || r.status === 204) return null;   // 該縣市沒有這項資料
+    throw new Error('TDX 回應錯誤（' + r.status + '）');
+  }
+  return null;
+}
+
+// ---- 資料欄位解析（TDX 回應是 {…, 清單名: [...]}，清單名各資料集不同，所以取第一個陣列） ----
+function rows(j) {
+  if (!j) return [];
+  if (Array.isArray(j)) return j;
+  for (const k in j) if (Array.isArray(j[k])) return j[k];
+  return [];
+}
+function zh(v) { return v == null ? '' : typeof v === 'string' ? v : (v.Zh_tw || v.En || ''); }
+// 遞迴找 PositionLat/PositionLon；路邊路段若只有 WKT 線段，就取所有點的平均
+function pos(o, depth) {
+  if (!o || typeof o !== 'object' || (depth || 0) > 3) return null;
+  if (typeof o.PositionLat === 'number' && typeof o.PositionLon === 'number' && o.PositionLat) return [o.PositionLat, o.PositionLon];
+  for (const k in o) {
+    const v = o[k];
+    if (typeof v === 'string' && /^(MULTI)?(LINESTRING|POINT|POLYGON)/i.test(v)) {
+      const m = v.match(/-?\d+\.\d+\s+-?\d+\.\d+/g);
+      if (m && m.length) { let la = 0, lo = 0; m.forEach(p => { const [x, y] = p.split(/\s+/).map(Number); lo += x; la += y; }); return [la / m.length, lo / m.length]; }
+    }
+  }
+  for (const k in o) { const v = o[k]; if (v && typeof v === 'object' && !Array.isArray(v)) { const p = pos(v, (depth || 0) + 1); if (p) return p; } }
+  return null;
+}
+function idOf(o, kind) { return o[kind === 'lot' ? 'CarParkID' : 'ParkingSegmentID'] || o.ID || ''; }
+
+// 靜態資料（位置、名稱、費率）每縣市快取在手機上
+const mem = {};
+async function staticData(city, kind) {
+  const ck = 'st_' + kind + '_' + city;
+  if (mem[ck]) return mem[ck];
+  const c = LS.get(ck, null);
+  if (c && Date.now() - c.t < STATIC_TTL) return (mem[ck] = c.d);
+  const j = await tdx(kind === 'lot' ? 'OffStreet/CarPark/City/' + city : 'OnStreet/ParkingSegment/City/' + city);
+  const d = [];
+  for (const o of rows(j)) {
+    const p = pos(o); if (!p) continue;
+    d.push([idOf(o, kind), zh(kind === 'lot' ? o.CarParkName : o.ParkingSegmentName) || zh(o.CarParkShortName) || '未命名', p[0], p[1],
+      zh(o.Address) || zh(o.ParkingSegmentAddress) || '', zh(o.FareDescription) || '']);
+  }
+  mem[ck] = d;
+  LS.set(ck, { t: Date.now(), d });   // 沒資料的縣市也記住，避免每分鐘重查
+  return d;
+}
+// 取汽車的剩餘格數：Availabilities 裡 SpaceType 1 是一般小客車；沒有細項就用總數
+function carCount(a) {
+  let tot = a.TotalSpaces, av = a.AvailableSpaces;
+  const list = Array.isArray(a.Availabilities) ? a.Availabilities : [];
+  const car = list.find(x => x.SpaceType === 1);
+  if (car) { tot = car.NumberOfSpaces != null ? car.NumberOfSpaces : tot; av = car.AvailableSpaces; }
+  else if (list.length && list.every(x => x.SpaceType === 2 || x.SpaceType === 3)) return null;   // 只有機車格
+  if (typeof av !== 'number' || av < 0) av = null;
+  if (typeof tot !== 'number' || tot < 0) tot = null;
+  if (a.ServiceStatus === 0) av = null;   // 暫停營業或資料中斷
+  return { av, tot, time: a.DataCollectTime || a.SrcUpdateTime || '' };
+}
+async function liveData(city, kind) {
+  const j = await tdx(kind === 'lot' ? 'OffStreet/ParkingAvailability/City/' + city : 'OnStreet/ParkingSegmentAvailability/City/' + city);
+  const m = new Map();
+  for (const a of rows(j)) { const c = carCount(a); if (c) m.set(idOf(a, kind), c); }
+  return m;
+}
+
+// ---- 主流程 ----
+async function search() {
+  if (state.busy || !state.center) return;
+  state.busy = true; $('#btnRefresh').disabled = true;
+  try {
+    const [lat, lon] = state.center;
+    const near = CITIES.map(c => [dist(lat, lon, c[2], c[3]), c]).sort((a, b) => a[0] - b[0]);
+    const cities = near.filter((x, i) => i === 0 || (i < 4 && x[0] < 60e3)).map(x => x[1]);
+    const kinds = state.kind === 'all' ? ['lot', 'seg'] : [state.kind];
+    const out = [];
+    let errs = [];
+    for (const c of cities) for (const k of kinds) {
+      try {
+        setStatus('讀取' + c[1] + (k === 'lot' ? '停車場' : '路邊格') + '…');
+        const st = await staticData(c[0], k);
+        const hits = st.filter(s => dist(lat, lon, s[2], s[3]) <= state.radius);
+        if (!hits.length) continue;
+        const live = await liveData(c[0], k);
+        for (const s of hits) {
+          const l = live.get(s[0]);
+          out.push({ id: k + s[0], kind: k, city: c[1], name: s[1], lat: s[2], lon: s[3], addr: s[4], fare: s[5],
+            d: dist(lat, lon, s[2], s[3]), av: l ? l.av : null, tot: l ? l.tot : null, time: l ? l.time : '' });
+        }
+      } catch (e) { errs.push(e.message); if (/金鑰|次數/.test(e.message)) break; }
+    }
+    out.sort((a, b) => (a.av == null) - (b.av == null) || a.d - b.d);
+    state.items = out;
+    render();
+    const t = new Date();
+    const hm = t.getHours() + ':' + String(t.getMinutes()).padStart(2, '0');
+    if (errs.length && !out.length) setStatus(errs[0], true);
+    else {
+      const free = out.filter(x => x.av > 0).length;
+      setStatus((errs.length ? '部分資料讀取失敗：' + errs[0] + '。' : '') + '範圍內 ' + out.length + ' 處，' + free + ' 處有空位 · ' + hm + ' 更新', !!errs.length);
+    }
+  } catch (e) {
+    setStatus(e.message || '讀取失敗，請檢查網路', true);
+  } finally { state.busy = false; $('#btnRefresh').disabled = false; }
+}
+
+function cls(x) {
+  if (x.av == null) return 'u';
+  if (x.av === 0) return 'r';
+  if (x.av < 5 || (x.tot && x.av / x.tot < 0.1)) return 'a';
+  return 'g';
+}
+function navUrl(x) { return 'https://www.google.com/maps/dir/?api=1&destination=' + x.lat.toFixed(6) + ',' + x.lon.toFixed(6) + '&travelmode=driving'; }
+function fmtD(m) { return m < 1000 ? Math.round(m / 10) * 10 + ' 公尺' : (m / 1000).toFixed(1) + ' 公里'; }
+
+// ---- 地圖 ----
+const map = L.map('map', { zoomControl: false, attributionControl: true }).setView([23.7, 121], 7);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+const layer = L.layerGroup().addTo(map);
+let meMarker = null, ring = null, programMove = false;
+map.on('movestart', () => { if (!programMove) $('#here').style.display = 'block'; });
+map.on('moveend', () => { programMove = false; });
+function moveMap(fn) { programMove = true; fn(); setTimeout(() => { programMove = false; }, 600); }
+
+function render() {
+  const show = state.items.filter(x => (state.kind === 'all' || x.kind === state.kind) && (!state.onlyFree || x.av > 0));
+  layer.clearLayers();
+  if (state.gps) {
+    if (!meMarker) meMarker = L.marker(state.gps, { icon: L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [18, 18] }), zIndexOffset: 1000 }).addTo(map);
+    else meMarker.setLatLng(state.gps);
+  }
+  if (ring) ring.remove();
+  ring = L.circle(state.center, { radius: state.radius, color: '#1e88e5', weight: 1, fillOpacity: 0.05 }).addTo(map);
+  const colors = { g: '#2e7d32', a: '#ef8f00', r: '#c62828', u: '#8a94a3' };
+  for (const x of show) {
+    const c = cls(x);
+    const label = x.av == null ? '?' : x.av;
+    const m = L.marker([x.lat, x.lon], { icon: L.divIcon({ className: '', html: '<div class="pin' + (x.kind === 'seg' ? ' seg' : '') + '" style="background:' + colors[c] + '">' + label + '</div>', iconSize: [32, 24], iconAnchor: [16, 12] }) });
+    m.on('click', () => select(x.id, true));
+    m.addTo(layer);
+  }
+  const box = $('#list');
+  if (!show.length) {
+    box.innerHTML = '<div class="empty">' + (state.items.length ? '範圍內目前沒有空位，可以把範圍調大或關掉「只看有空位」。' : '這個範圍內沒有提供即時資料的停車場或路邊格，可以把範圍調大試試。') + '</div>';
+    return;
+  }
+  box.innerHTML = show.map(x => {
+    const c = cls(x);
+    const big = x.av == null ? '?' : x.av;
+    const small = x.av == null ? '無即時' : (x.tot ? '/ ' + x.tot + ' 格' : '格');
+    return '<div class="item' + (state.sel === x.id ? ' sel' : '') + '" data-id="' + esc(x.id) + '">' +
+      '<div class="num ' + c + '">' + big + '<small>' + small + '</small></div>' +
+      '<div class="info"><b>' + esc(x.name) + '</b><span><i class="tag">' + (x.kind === 'lot' ? '停車場' : '路邊格') + '</i>' + fmtD(x.d) + (x.addr ? ' · ' + esc(x.addr) : '') + '</span>' +
+      '<div class="fare">' + (x.fare ? '費率：' + esc(x.fare) : '沒有費率資料') + (x.time ? '\n資料時間：' + esc(String(x.time).replace('T', ' ').slice(0, 16)) : '') + '</div></div>' +
+      '<a class="nav" href="' + navUrl(x) + '" target="_blank" rel="noopener">導航</a></div>';
+  }).join('');
+}
+function select(id, fromMap) {
+  state.sel = state.sel === id && !fromMap ? null : id;
+  render();
+  const el = document.querySelector('.item[data-id="' + CSS.escape(id) + '"]');
+  if (el && fromMap) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  const x = state.items.find(i => i.id === id);
+  if (x && !fromMap && state.sel) moveMap(() => map.panTo([x.lat, x.lon]));
+}
+$('#list').addEventListener('click', e => {
+  if (e.target.closest('a')) return;
+  const it = e.target.closest('.item'); if (it) select(it.dataset.id, false);
+});
+
+// ---- 定位 ----
+function locate(thenSearch) {
+  if (!navigator.geolocation) { setStatus('這個瀏覽器不支援定位，可以拖動地圖後按「在這裡搜尋」', true); return; }
+  setStatus('定位中…');
+  navigator.geolocation.getCurrentPosition(p => {
+    state.gps = state.center = [p.coords.latitude, p.coords.longitude];
+    $('#here').style.display = 'none';
+    moveMap(() => map.setView(state.center, state.radius > 1000 ? 14 : 15));
+    if (thenSearch) search();
+  }, err => {
+    const msg = err.code === 1 ? '沒有定位權限。請在瀏覽器網址列旁的設定允許「位置」，或拖動地圖後按「在這裡搜尋」' : '抓不到 GPS 位置，請到室外或開啟定位後按「更新」';
+    setStatus(msg, true);
+    if (state.center && thenSearch) search();
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+}
+
+// ---- 操作 ----
+document.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === b));
+  const prev = state.kind; state.kind = b.dataset.k;
+  // 「全部」已包含兩種資料，切到單一種不用重新查詢
+  if (prev !== 'all' && state.kind !== prev) search(); else render();
+}));
+$('#radius').addEventListener('change', e => { state.radius = +e.target.value; LS.set('radius', state.radius); search(); });
+$('#onlyFree').addEventListener('change', e => { state.onlyFree = e.target.checked; LS.set('onlyFree', state.onlyFree); render(); });
+$('#btnRefresh').addEventListener('click', () => locate(true));
+$('#here').addEventListener('click', () => { const c = map.getCenter(); state.center = [c.lat, c.lng]; $('#here').style.display = 'none'; search(); });
+
+const dlg = $('#dlg');
+function openSettings() { const k = LS.get('tdxKey', {}) || {}; $('#cid').value = k.id || ''; $('#csec').value = k.secret || ''; dlg.showModal(); }
+$('#btnSet').addEventListener('click', openSettings);
+$('#dlgSkip').addEventListener('click', () => { LS.set('skipKey', true); dlg.close(); if (!state.center) locate(true); });
+$('#dlgSave').addEventListener('click', async () => {
+  const id = $('#cid').value.trim(), secret = $('#csec').value.trim();
+  if (!id || !secret) { LS.del('tdxKey'); token = null; LS.del('tdxToken'); dlg.close(); return; }
+  LS.set('tdxKey', { id, secret }); token = null; LS.del('tdxToken');
+  dlg.close();
+  try { await getToken(true); setStatus('金鑰驗證成功'); } catch (e) { setStatus(e.message, true); return; }
+  if (state.center) search(); else locate(true);
+});
+
+// 每分鐘自動更新（App 在背景時暫停）
+setInterval(() => { if (document.visibilityState === 'visible' && state.center && !dlg.open) search(); }, REFRESH_MS);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.center) search(); });
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+
+if (!LS.get('tdxKey', null) && !LS.get('skipKey', false)) { openSettings(); setStatus('請先設定 TDX 金鑰'); }
+else locate(true);
+</script>
+</body>
+</html>
